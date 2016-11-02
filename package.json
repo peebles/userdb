@@ -4,19 +4,22 @@
   "description": "User management/authentication system",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
     "user",
     "authentication",
     "authorization"
   ],
-  "author": "Andrew Peebles",
+  "author": {
+    "name": "Andrew Peebles"
+  },
   "license": "ISC",
   "dependencies": {
     "async": "^2.0.0-rc.6",
     "bcryptjs": "^2.3.0",
+    "cortexjs": "^2.1.0",
     "csv-parse": "^1.1.1",
+    "ejs": "^2.5.2",
     "express-session": "^1.13.0",
     "js-yaml": "^3.6.1",
     "knex": "^0.11.7",
@@ -25,8 +28,21 @@
     "njwt": "^0.3.1",
     "node-getopt": "^0.2.3",
     "node-uuid": "^1.4.7",
+    "nodemailer": "^2.6.4",
     "passport": "^0.3.2",
     "passport-local": "^1.0.0",
+    "react": "^15.0.2",
+    "react-addons-css-transition-group": "^15.3.2",
+    "react-alert": "^1.0.14",
+    "react-bootstrap-modal": "^3.0.0",
+    "react-bootstrap-table": "^2.4.1",
+    "react-confirm-bootstrap": "^3.1.2",
+    "react-dom": "^15.0.2",
+    "react-router": "^2.4.0",
+    "react-select": "^1.0.0-rc.2",
+    "react-side-effect": "^1.0.2",
+    "react-stormpath": "^1.2.1",
+    "request": "^2.75.0",
     "shortid": "^2.2.6",
     "sprintf-js": "^1.0.3",
     "winston": "^2.2.0"

@@ -12,6 +12,7 @@ function application() {
     [ '', 'firstname[=FULLNAME]', 'First name of user' ],
     [ '', 'lastname[=FULLNAME]', 'Last name of user' ],
     [ '', 'email[=EMAIL]', 'Email of user' ],
+    [ '', 'account[=NAME]', 'Account name of user' ],
     [ '', 'role[=ROLE]', 'Role for user' ],
     [ '', 'password=[PASSWORD]', 'Optional - password for user' ],
     [ '', 'disableWorkflow', 'Disable email workflow for new user(s)' ],
@@ -68,6 +69,7 @@ function application() {
 	      email: row[2],
 	      role: ( row[3] == '' ? null : row[3] ),
 	      password: ( row[4] == '' ? null : row[4] ),
+	      account: ( row[5] == '' ? null : row[5] ),
 	    });
 	  });
 	  return cb( null, users );
@@ -88,15 +90,32 @@ function application() {
 	  email: u.email,
 	  givenName: u.firstname,
 	  surname: u.lastname,
+	  customData: {},
 	  status: ( options.disableWorkflow ? 'ENABLED' : 'PENDING' )
 	};
 	async.waterfall([
 	  function( cb ) {
-	    userdb.findOrCreateUser( dbu, (u.password || 'new123'), cb );
+	    userdb.findOrCreateAccount({ name: u.account }, function( err, account ) {
+	      if ( err ) return cb( err );
+	      dbu.account_id = account.id;
+	      cb( null, account );
+	    });
 	  },
-	  function( user, cb ) {
-	    if ( ! u.role ) return cb( null, user, null );
-	    userdb.findOrCreateRole( { name: u.role }, function( err, role ) {
+	  function( account, cb ) {
+	    // every account should have an admin role
+	    userdb.findOrCreateRole( { name: 'admin', account_id: account.id }, function( err, role ) {
+	      if ( err ) return cb( err );
+	      cb( null, role );
+	    });
+	  },
+	  function( account, cb ) {
+	    userdb.findOrCreateRole( { name: u.role, account_id: account.id }, function( err, role ) {
+	      if ( err ) return cb( err );
+	      cb( null, role );
+	    });
+	  },
+	  function( role, cb ) {
+	    userdb.findOrCreateUser( dbu, (u.password || 'new123'), function( err, user ) {
 	      if ( err ) return cb( err );
 	      cb( null, user, role );
 	    });

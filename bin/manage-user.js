@@ -1,6 +1,7 @@
 var GetOpts = require( 'node-getopt' );
 var async   = require( 'async' );
 var sprintf = require( 'sprintf-js' ).sprintf;
+var _ = require( 'lodash' );
 
 var Usage = [
   "node manage-user.js --config=./config.json --email=joe@com.com --operation=profile --firstname=Joe --middlename=J --lastname=Jones --new-email=jones@com.com",
@@ -8,6 +9,8 @@ var Usage = [
   "node manage-user.js --config=./config.json --email=joe@com.com --operation=disable",
   "node manage-user.js --config=./config.json --email=joe@com.com --operation=enable",
   "node manage-user.js --config=./config.json --email=joe@com.com --operation=unlock",
+  "node manage-user.js --config=./config.json --email=joe@com.com --operation=add-role --role=ROLENAME",
+  "node manage-user.js --config=./config.json --email=joe@com.com --operation=remove-role --role=ROLENAME",
   "node manage-user.js --config=./config.json --operation=unlockall",
 ];
 
@@ -22,7 +25,8 @@ function application() {
     [ '', 'lastname[=LASTNAME]', 'Last name of user' ],
     [ '', 'email[=EMAIL]', 'Email of user' ],
     [ '', 'new-email[=EMAIL]', 'New email for user' ],
-    [ '', 'operation[=OPERATION]', 'Operation to perform (profile, reset-password, disable, enable, unlock, unlockall)' ],
+    [ '', 'role[=NAME]', 'Role name' ],
+    [ '', 'operation[=OPERATION]', 'Operation to perform (profile, reset-password, disable, enable, unlock, unlockall, add-role, remove-role)' ],
 
     [ 'h', 'help', 'Display this help' ],
   ]);
@@ -73,6 +77,12 @@ function application() {
       break;
     case 'unlockall':
       unlockAll( options );
+      break;
+    case 'add-role':
+      addRole( options );
+      break;
+    case 'remove-role':
+      removeRole( options );
       break;
     default:
       console.log( 'Unrecognized operation!' );
@@ -142,8 +152,9 @@ function application() {
       console.log( Usage.join("\n") );
       process.exit(1);
     }
-    userdb.findUserByName( username, function( err, user ) {
+    userdb.searchForUsers({ email: username }, function( err, users ) {
       if ( err ) exit( err );
+      var user = users[0];
       if ( ! user ) exit( new Error( 'cannot find user with email=' + username ) );
       userdb.saveUser({ id: user.id, status: 'ENABLED' }, exit );    
     });
@@ -156,8 +167,9 @@ function application() {
       console.log( Usage.join("\n") );
       process.exit(1);
     }
-    userdb.findUserByName( username, function( err, user ) {
+    userdb.searchForUsers({ email:  username }, function( err, users ) {
       if ( err ) exit( err );
+      var user = users[0];
       if ( ! user ) exit( new Error( 'cannot find user with email=' + username ) );
       userdb.unlockUser( user, exit );
     });
@@ -165,6 +177,42 @@ function application() {
 
   function unlockAll( opts ) {
     userdb.unlockUsers( exit );
+  }
+
+  function removeRole( opts ) {
+    var username = opts.email;
+    if ( ! username ) {
+      console.log( 'email is required!' );
+      console.log( Usage.join("\n") );
+      process.exit(1);
+    }
+    userdb.findUserByName( username, function( err, user ) {
+      if ( err ) exit( err );
+      if ( ! user ) exit( new Error( 'cannot find user with email=' + username ) );
+      var role = _.find( user.roles, { name: opts.role } );
+      if ( ! role ) exit( new Error( 'Cannot find role "' + opts.role + '" associated with this user!' ) );
+      userdb.removeRoleFromUser( role, user, exit );
+    });
+  }
+
+  function addRole( opts ) {
+    var username = opts.email;
+    if ( ! username ) {
+      console.log( 'email is required!' );
+      console.log( Usage.join("\n") );
+      process.exit(1);
+    }
+    userdb.findUserByName( username, function( err, user ) {
+      if ( err ) exit( err );
+      if ( ! user ) exit( new Error( 'cannot find user with email=' + username ) );
+      userdb.getUserAccount( user, function( err, account ) {
+	if ( err ) exit( err );
+	userdb.findOrCreateRole({ name: opts.role, account_id: account.id }, function( err, role ) {
+	  if ( err ) exit( err );
+	  userdb.addRoleToUser( role, user, exit );
+	});
+      });
+    });
   }
 
 }

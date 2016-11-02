@@ -44,6 +44,23 @@ If you go the `git-clone` route, then you'll want to add something like the foll
 }
 ```
 
+If you go the "npm install" route, then add the following into your `webpack.config.js` file:
+
+```javascript
+  module: {
+    loaders: [
+      {
+        test: /\.js$/,
+        loaders: ['babel-loader'],
+        exclude: /node_modules\/(?!(userdb)\/).*/,
+        include: [ path.join(__dirname, 'src'), path.join(__dirname,'node_modules','userdb') ]
+      }
+    ]
+  }
+```
+
+In other words, exclude node_modules **except** for "userdb" and explicity include node_modules/userdb.
+
 ## Usage
 
 This library was designed to work with `express`.  In your main application:
@@ -72,6 +89,25 @@ This library was designed to work with `express`.  In your main application:
   });
 
   app.listen( 3000 );
+```
+
+### Userdb and React UI
+
+If you are using the react UI, then you need to include some css.  The css file is going to be
+under node_modules/userdb/react/css/userdb.css.  You can include this by either copying it to your
+own css directory, or by including it directly.  To include it directly, you'll probably want something like the
+following in your server code:
+
+```javascript
+  // static content
+  app.use( express.static( path.join( __dirname, 'static' ) ) );
+  app.use( express.static( path.join( __dirname, 'node_modules' ) ) );
+```
+
+and then in your static/css/styles.css file:
+
+```css
+@import "/userdb/react/css/userdb.css";
 ```
 
 ## Configuration

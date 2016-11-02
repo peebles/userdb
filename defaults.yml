@@ -10,6 +10,9 @@ debugEndpoints: false
 #
 logger: null
 
+# The name of the group used to represebt super-admins
+super-admin: super-admin
+
 # These are the main endpoints a client would call, or would be
 # accessible by clikcing on a link in a workflow email.
 #

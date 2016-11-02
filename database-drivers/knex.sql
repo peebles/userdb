@@ -1,5 +1,19 @@
+create table if not exists accounts (
+  id           varchar(14) primary key,
+  description  varchar(512),
+  name         varchar(32) not NULL,
+  status       varchar(14) default "ENABLED",
+  customData   text,
+  created_date integer NULL,
+  updated_date integer NULL
+) ENGINE = InnoDB;
+
+create trigger accounts_created before insert on `accounts` for each row begin if (NEW.created_date is null) then set NEW.created_date = UNIX_TIMESTAMP(NOW()); end if; end;
+create trigger accounts_updated before update on `accounts` for each row begin set NEW.updated_date = UNIX_TIMESTAMP(NOW()); end;
+
 create table if not exists users (
   id          varchar(14) primary key,
+  account_id  varchar(14) not null,
   givenName   varchar(64),
   middleName  varchar(64),
   surname     varchar(64),
@@ -17,7 +31,8 @@ create table if not exists users (
   created_date	integer NULL,
   updated_date	integer NULL,
   index idx_users_1 (email),
-  index idx_users_2 (email,status)
+  index idx_users_2 (email,status),
+  constraint fk_users_1 foreign key( account_id ) references accounts(id)  on delete cascade on update cascade
 ) ENGINE = InnoDB;
 
 create trigger users_created before insert on `users` for each row begin if (NEW.created_date is null) then set NEW.created_date = UNIX_TIMESTAMP(NOW()); end if; end;
@@ -25,12 +40,14 @@ create trigger users_updated before update on `users` for each row begin set NEW
 
 create table if not exists roles (
   id           varchar(14) primary key,
+  account_id   varchar(14) not null,
   description  varchar(512),
   name         varchar(32) not NULL,
   status       varchar(14) default "ENABLED",
   customData   text,
   created_date integer NULL,
-  updated_date integer NULL
+  updated_date integer NULL,
+  constraint fk_roles_1 foreign key( account_id ) references accounts(id)  on delete cascade on update cascade
 ) ENGINE = InnoDB;
 
 create trigger roles_created before insert on `roles` for each row begin if (NEW.created_date is null) then set NEW.created_date = UNIX_TIMESTAMP(NOW()); end if; end;

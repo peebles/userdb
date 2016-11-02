@@ -140,13 +140,14 @@ UserDB.prototype.initialize = function( app, _config ) {
       self.findUserById( id, function( err, user ) {
 	if ( err ) return done( err );
 	if ( user ) delete user.password;
+	self.addUserHelpers( user );
 	done( null, user );
       });
     });
   
     // Install the "local" strategy
     passport.use( "local", new LocalStrategy(
-      { usernameField: 'username', passwordField: 'password' },
+      { usernameField: 'login', passwordField: 'password' },
       function( username, password, done ) {
 	self.findUserByName( username, function( err, user ) {
           if ( err ) return done( err, false );
@@ -154,6 +155,7 @@ UserDB.prototype.initialize = function( app, _config ) {
           self.verifyPassword( user, password, function( err ) {
             if ( err ) return done( err, false );
             delete user.password;
+	    self.addUserHelpers( user );
             return done( null, user );
           });
 	});
@@ -247,7 +249,8 @@ UserDB.prototype.initialize = function( app, _config ) {
     if ( self.config().endpoints.forgot.enabled ) {
       app.all( self.config().endpoints.forgot.uri, function( req, res, next ) {
 	var email = req.query.email || req.body.email ||
-                    req.query.username || req.body.username;
+                    req.query.username || req.body.username ||
+		    req.query.login || req.body.login;
 	self.findUserByName( email, function( err, user ) {
           if ( err ) return next( new HttpError( req, 400, 'Cannot find user:' + err.message ) );
           if ( ! user ) return res.end(); // NO ERROR to prevent user sniffing
@@ -269,6 +272,9 @@ UserDB.prototype.initialize = function( app, _config ) {
           });
 	});
       });
+
+      // and the admin controllers (add/edit/remove accounts/roles/users
+      require( './controllers' )( app, self );
     }
 
     /**
@@ -359,9 +365,68 @@ UserDB.prototype.config = function() {
   return this._config;
 }
 
+UserDB.prototype.addUserHelpers = function( user ) {
+  // helper functions for the server side
+
+  // user.has( 'admin' )
+  // return true if the user has the role 'admin'
+  //
+  user[ 'has' ] = function( role ) {
+    try {
+      var g = _.find( this.roles, function( i ) { return i.name == role; } );
+      if ( g ) return true;
+      else return false;
+    } catch( err ) {
+      app.log.error( err );
+      return false;
+    }
+  };
+
+  // user.can( [ 'ops', 'admin' ], all );
+  // returns true if the user has a role that matches one of the
+  // input roles.  If all is present and true, then the user
+  // must have all the roles specified.  If no arguments at
+  // all are passed, this function always returns true.  If the
+  // user has 'super_admin', this function returns true.
+  //
+  user[ 'can' ] = function( requiredRoles, all ) {
+    all = all === undefined ? false : all;
+    if ( requiredRoles === undefined ) return true;
+    if ( this.has( 'super_admin' ) ) return true;
+    var user_groups = _.map( this.roles, 'name' );
+    var intersection = _.intersection( user_groups, requiredRoles );
+    if ( ! intersection.length ) return false;
+    if ( ! all && intersection.length ) return true;
+    if ( intersection.length == requiredRoles.length ) return true;
+    return false;
+  };
+
+  user[ 'canOnly' ] = function( requiredRoles, all ) {
+    all = all === undefined ? false : all;
+    if ( requiredRoles === undefined ) return true;
+    // if ( this.has( 'super_admin' ) ) return true;
+    var user_groups = _.map( this.roles, 'name' );
+    var intersection = _.intersection( user_groups, requiredRoles );
+    if ( ! intersection.length ) return false;
+    if ( ! all && intersection.length ) return true;
+    if ( intersection.length == requiredRoles.length ) return true;
+    return false;
+  };
+
+}
+
 UserDB.prototype.findUserById = function( id, cb ) {
   var self = this;
   self._db.findUserById( id, function( err, user ) {
+    if ( err ) return cb( err );
+    if ( ! user ) return cb();
+    cb( null, self.transformer( user ) );
+  });
+}
+
+UserDB.prototype.findAnyUserById = function( id, cb ) {
+  var self = this;
+  self._db.findAnyUserById( id, function( err, user ) {
     if ( err ) return cb( err );
     if ( ! user ) return cb();
     cb( null, self.transformer( user ) );
@@ -381,12 +446,26 @@ UserDB.prototype.saveUser = function( user, cb ) {
   this._db.saveUser( user, cb );
 }
 
-UserDB.prototype.searchForUsers = function( query, cb ) {
+UserDB.prototype.removeUser = function( userId, cb ) {
+  this._db.removeUser( userId, cb );
+}
+
+UserDB.prototype.searchForUsers = function( query, opts, cb ) {
   var self = this;
-  self._db.searchForUsers( query, function( err, users ) {
-    if ( err ) return cb( err );
-    cb( null, _.map( users, function( r ) { return self.transformer( r ); } ) );
-  });
+  if ( ! cb ) {
+    cb = opts;
+    self._db.searchForUsers( query, function( err, users ) {
+      if ( err ) return cb( err );
+      cb( null, _.map( users, function( r ) { return self.transformer( r ); } ) );
+    });
+  }
+  else {
+    self._db.searchForUsers( query, opts, function( err, users ) {
+      if ( err ) return cb( err );
+      users.users = _.map( users.users, function( r ) { return self.transformer( r ); } );
+      cb( null, users );
+    });
+  }
 }
 
 UserDB.prototype.searchForUsersQ = function( q, cb ) {
@@ -480,6 +559,54 @@ UserDB.prototype.findOrCreateRole = function( role, cb ) {
 
 UserDB.prototype.addRoleToUser = function( role, user, cb ) {
   this._db.addRoleToUser( role, user, cb );
+}
+
+UserDB.prototype.getUserAccount = function( user, cb ) {
+  this._db.getUserAccount( user, cb );
+}
+
+UserDB.prototype.getAccountUsers = function( account, cb ) {
+  this._db.getAccountUsers( account, cb );
+}
+
+UserDB.prototype.getAccounts = function( where, cb ) {
+  this._db.getAccounts( where, cb );
+}
+
+UserDB.prototype.removeAccount = function( accountId, cb ) {
+  this._db.removeAccount( accountId, cb );
+}
+
+UserDB.prototype.changeAccountStatus = function( accountId, cb ) {
+  this._db.changeAccountStatus( accountId, cb );
+}
+
+UserDB.prototype.searchForAccounts = function( query, cb ) {
+  this._db.searchForAccounts( query, cb );
+}
+
+UserDB.prototype.findOrCreateAccount = function( account, cb ) {
+  this._db.findOrCreateAccount( account, cb );
+}
+
+UserDB.prototype.upsertAccount = function( account, cb ) {
+  this._db.upsertAccount( account, cb );
+}
+
+UserDB.prototype.removeRoleFromUser = function( role, user, cb ) {
+  this._db.removeRoleFromUser( role, user, cb );
+}
+
+UserDB.prototype.searchForRoles = function( query, cb ) {
+  this._db.searchForRoles( query, cb );
+}
+
+UserDB.prototype.upsertRole = function( role, cb ) {
+  this._db.upsertRole( role, cb );
+}
+
+UserDB.prototype.removeRole = function( roleId, cb ) {
+  this._db.removeRole( roleId, cb );
 }
 
 UserDB.prototype.newUserWorkflow = function( user, cb ) {
@@ -577,7 +704,7 @@ UserDB.prototype.authenticated = function( req, res, next ) {
   passport.authenticate( realm, function( err, user, info ) {
     if ( err && req.path == self.config().endpoints.login.uri ) {
       // This is a password match failure on the login screen!
-      return self.noteLastUnsuccessfulLogin( (req.body.username || req.query.username), err.message, function( err, message ) {
+      return self.noteLastUnsuccessfulLogin( (req.body.username || req.query.username || req.body.login || req.query.login), err.message, function( err, message ) {
 	if ( err ) return authenticatedErrorResponse( req, res, 401, err.message );
 	else return authenticatedErrorResponse( req, res, 401, message );
       });
@@ -644,14 +771,14 @@ UserDB.prototype.checkPassword = function( p ) {
   var anUpperCase = /[A-Z]/;
   var aLowerCase = /[a-z]/; 
   var aNumber = /[0-9]/;
-  var aSpecial = /[!|@|#|$|%|^|&|*|(|)|-|_]/;
+  var aSpecial = /[!|@|#|$|%|^|&|*|(|)|\-|_]/;
 
   var errorMessage = [
     "Password must be at least", spec.length, "characters long",
     "and contain at least", spec.uppers, "uppercase,",
-    spec.lowers, "lowercase, and", spec.specials, "special characters" ].join( ' ' );
+    spec.lowers, "lowercase,", spec.numbers, "numbers and", spec.specials, "special characters." ].join( ' ' );
 
-  if ( p.length < spec.length ) return errorMessage;
+  if ( p.length < spec.length ) return errorMessage + '  Length too short.';
 
   var numUpper = 0;
   var numLower = 0;
@@ -669,10 +796,48 @@ UserDB.prototype.checkPassword = function( p ) {
   }
 
   if ( numUpper < spec.uppers || numLower < spec.lowers || numNums < spec.numbers || numSpecials < spec.specials ) {
-    return errorMessage
+    return errorMessage + '  ' + [ numUpper, numLower, numNums, numSpecials ].join( ', ' );
   }
   
   return null;
+}
+
+UserDB.prototype.generateRandomPassword = function() {
+  if ( ! this.config().passwordPolicy.enabled ) {
+    var spec = {
+      length: 8,
+      uppers: 1,
+      lowers: 1,
+      numbers: 1,
+      specials: 1,
+    };
+  }
+  else {
+    var spec = this.config().passwordPolicy;
+  }
+
+  var Uppers = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  var Lowers = 'abcdefghijklmnopqrstuvwxyz';
+  var Numbers = '0123456789';
+  var Specials = '!@#$%^&*()-_';
+
+  function randomChars( num, set ) {
+    var str = '';
+    var i = 0;
+    for( i=0; i<num; i++ ) {
+      str += set.charAt( Math.floor(Math.random() * set.length ) );
+    }
+    return str;
+  }
+
+  var password = '';
+  password += randomChars( spec.uppers, Uppers );
+  password += randomChars( spec.lowers, Lowers );
+  password += randomChars( spec.numbers, Numbers );
+  password += randomChars( spec.specials, Specials );
+  var more = spec.length - password.length;
+  if ( more > 0 ) password += randomChars( more+1, Lowers );
+  return password;
 }
 
 UserDB.prototype.resetPassword = function( user, cb ) {

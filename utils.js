@@ -18,8 +18,12 @@ module.exports = function( app ) {
         buf.push( sprintf( "| - %-15s : %s", k, v ) );
       });
       if ( req.headers['content-type'] == 'application/json' ) {
-        var json = JSON.stringify( req.body, null, 2 );
-        lines = json.split("\n");
+	var json = _.cloneDeep( req.body );
+	_.forIn( json, function( v, k ) {
+	  if ( k.match( /[Pp]assword/ ) ) json[k] = '(blocked)';
+	});
+        var jsonStr = JSON.stringify( json, null, 2 );
+        lines = jsonStr.split("\n");
         if ( lines.length > 40 ) {
           lines = lines.slice( 0, 39 );
           lines.push( '... output truncated ...' );
