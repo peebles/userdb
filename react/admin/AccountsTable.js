@@ -99,12 +99,14 @@ export default class AccountsTable extends React.Component {
 
   gotoUsers = (e) => {
     let accountId = $(e.target).data( 'accountid' );
-    this.props.onNavigateToUsers( accountId );
+    let accountName = $(e.target).data( 'accountname' );
+    this.props.onNavigateToUsers( accountId, accountName );
   }
 
   gotoRoles = (e) => {
     let accountId = $(e.target).data( 'accountid' );
-    this.props.onNavigateToRoles( accountId );
+    let accountName = $(e.target).data( 'accountname' );
+    this.props.onNavigateToRoles( accountId, accountName );
   }
 
   actionsFormatter = ( cell, row ) => {
@@ -126,8 +128,8 @@ export default class AccountsTable extends React.Component {
 		     confirmText="Change Status">
 	      <li><a>{statusAction} account</a></li>
 	    </Confirm>
-	    <li><a onClick={this.gotoUsers} data-accountid={account.id}>users...</a></li>
-	    <li><a onClick={this.gotoRoles} data-accountid={account.id}>roles...</a></li>
+	    <li><a onClick={this.gotoUsers} data-accountid={account.id} data-accountname={account.name}>users...</a></li>
+	    <li><a onClick={this.gotoRoles} data-accountid={account.id} data-accountname={account.name}>roles...</a></li>
           </ul>
         </div>
       </div>
