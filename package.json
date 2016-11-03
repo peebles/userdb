@@ -1,6 +1,6 @@
 {
   "name": "userdb",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "User management/authentication system",
   "main": "index.js",
   "scripts": {

@@ -4,3 +4,4 @@ export ResetPasswordPage from './ResetPasswordPage';
 export VerifyEmailPage from './VerifyEmailPage';
 export HomeLink from './HomeLink';
 export PasswordExpiredPage from './PasswordExpiredPage';
+export AccountPage from './AccountPage';

@@ -6,7 +6,6 @@ class BaseAuthPage extends React.Component {
 
   static contextTypes = {
     brand: React.PropTypes.object,
-    checkPassword: React.PropTypes.func,
   };
 
   componentDidMount() {

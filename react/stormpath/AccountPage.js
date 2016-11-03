@@ -4,7 +4,12 @@ import GlobalSideEffects from '../components/GlobalSideEffects';
 
 import { UserProfileForm } from 'react-stormpath';
 
-class Account extends React.Component {
+export default class AccountPage extends React.Component {
+
+  static contextTypes = {
+    brand: React.PropTypes.object,
+  };
+  
   loading( busy ) {
   }
 
@@ -125,9 +130,3 @@ class Account extends React.Component {
   }
 }
 
-AccountPage.contextTypes = {
-  brand: React.PropTypes.object,
-  checkPassword: React.PropTypes.func,
-};
-
-export default Account;
