@@ -241,7 +241,10 @@ module.exports = function( app, pwhash ) {
 
   // get the account for a user
   lib.getUserAccount = function( user, cb ) {
-    lib.getAccounts({ id: user.account_id }, cb );
+    lib.getAccounts({ 'accounts.id': user.account_id }, function( err, accounts ) {
+      if ( err ) return cb( err );
+      cb( null, accounts[0] );
+    });
   }
 
   // get the users for an account
