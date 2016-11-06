@@ -105,7 +105,7 @@ function application() {
 	    // every account should have an admin role
 	    userdb.findOrCreateRole( { name: 'admin', account_id: account.id }, function( err, role ) {
 	      if ( err ) return cb( err );
-	      cb( null, role );
+	      cb( null, account );
 	    });
 	  },
 	  function( account, cb ) {

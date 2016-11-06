@@ -1,4 +1,5 @@
 var async = require( 'async' );
+var _ = require( 'lodash' );
 
 module.exports = function( app, udb ) {
 
@@ -241,6 +242,185 @@ module.exports = function( app, udb ) {
 	res.jsonp({});
       });
       
+    });
+  });
+
+  // curl -v  -F 'file=@data/users.xlsx;type=application/xlsx' http://192.168.99.104/users/import
+  app.post( '/users/import', udb.authenticated, udb.authorized( ['super-admin', 'admin'], false ), function( req, res, next ) {
+    var streamer = require( '../lib/stream-csv' )(app);
+    var multiparty = require( 'multiparty' );
+    var fs = require( 'fs' );
+    var form = new multiparty.Form({
+      autoFiles: true,
+      maxFilesSize: 26214400, // 25 Mb
+    });
+
+    function clean( str ) {
+      if ( ! str ) return null;
+      var c = str.replace( /^\s+/, '' ).replace( /\s+$/, '' );
+      if ( c == '' ) return null;
+      else return c;
+    }
+
+    function isValid( u, headers ) {
+      for( var i=0; i<headers.length; i++ ) {
+	u[ headers[i] ] = clean( u[ headers[i] ] );
+	if ( headers[i] != 'role' && u[ headers[i] ] == undefined ) {
+	  return new Error( 'Missing value for: ' + headers[i] );
+	}
+      }
+      var re = /^(([^<>()[\]\\.,;:\s@\"]+(\.[^<>()[\]\\.,;:\s@\"]+)*)|(\".+\"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
+      if ( ! re.test( u.email ) )
+	return new Error( 'Email field does not appear to be valid: ' + u.email );
+      return null;
+    }
+
+    function addUser( u, options, cb ) {
+      var dbu = {
+        email: u.email,
+        givenName: u.givenname,
+        surname: u.surname,
+        customData: {},
+        status: ( options.disableWorkflow ? 'ENABLED' : 'PENDING' )
+      };
+      if ( ! options.isSuperAdmin ) u.account = options.accountName;
+      async.waterfall([
+        function( cb ) {
+	  //app.log.debug( 'add account:', u.account );
+          udb.findOrCreateAccount({ name: u.account }, function( err, account ) {
+            if ( err ) return cb( err );
+            dbu.account_id = account.id;
+            cb( null, account );
+          });
+        },
+        function( account, cb ) {
+          // every account should have an admin role
+	  //app.log.debug( 'add admin to ', account.name, account.id );
+          udb.findOrCreateRole( { name: 'admin', account_id: account.id }, function( err, role ) {
+            if ( err ) return cb( err );
+            cb( null, account );
+          });
+        },
+        function( account, cb ) {
+	  if ( ! u.role ) return cb( null, null );
+	  //app.log.debug( 'add role', u.role, 'to', account.name, account.id );
+          udb.findOrCreateRole( { name: u.role, account_id: account.id }, function( err, role ) {
+            if ( err ) return cb( err );
+            cb( null, role );
+          });
+        },
+        function( role, cb ) {
+	  //app.log.debug( 'add user:', dbu );
+          udb.findOrCreateUser( dbu, (u.password || 'new123'), function( err, user ) {
+            if ( err ) return cb( err );
+            cb( null, user, role );
+          });
+        },
+        function( user, role, cb ) {
+          if ( ! role ) return cb( null, user );
+	  //app.log.debug( 'add role', role.name, 'to user', user.email );
+          udb.addRoleToUser( role, user, function( err ) {
+	    if ( err ) app.log.error( err );
+            if ( err ) return cb( err );
+            cb( null, user );
+          });
+        },
+        function( user, cb ) {
+          if ( options.disableWorkflow ) return cb( null, user );
+	  // if there is already an email pending, don't resend
+	  if ( (user.status == 'PENDING') && user.emailVerificationToken ) return cb( null, user );
+	  //app.log.debug( 'sending workflow email to', user.email );
+          udb.newUserWorkflow( user, function( err ) {
+            if ( err ) return cb( err );
+            cb( null, user );
+          });
+        },
+      ], function( err, user ) {
+        if ( err ) return cb( err );
+        app.log.info( 'User Import:', user );
+        return cb( null, user );
+      });
+    }
+    
+    form.parse(req, function( err, _fields, _files ) {
+      if ( err ) return next( err );
+      var fields = {};
+      _.forIn( _fields, function( v, k ) {
+	if ( Array.isArray( v ) ) v = v[0];
+	fields[k] = v;
+      });
+
+      var ignoreHeaders = fields.ignoreHeaders; // a checkbox on the file upload form
+      var disableNewUserWorkflow = fields.disableNewUserWorkflow;  // ditto
+      
+      var files = [];
+      _.forIn( _files, function( v, k ) {
+	files = _.concat( files, v );
+      });
+      if ( files.length != 1 ) {
+	files.forEach( function( file ) {
+	  require( 'fs' ).unlinkSync( file.path );
+	});
+	return res.status( 400 ).send( 'One file and one file only supported!' );
+      }
+      else {
+	var headers = [
+	  'givenname', 'surname', 'email', 'role', 'password',
+	];
+
+	// super-admins can import users into different accounts
+	var isSuperAdmin = req.user.has( 'super-admin' );
+	var loggedInUserAccountName = req.user.accounts[0].name;
+
+	if ( isSuperAdmin ) headers.push( 'account' );
+	
+	// make sure we deal with rows sequencially!
+	var rowNum = 0;
+	var q = async.queue( function( o, cb ) {
+	  if ( o == null ) {
+	    if ( ! res.headersSent ) res.jsonp();  // on the EOF, send normal response
+	    return process.nextTick( cb );
+	  }
+	  if ( rowNum == 0 && ignoreHeaders ) { rowNum += 1; return cb() };
+	  //app.log.debug( o );
+
+	  var problems = isValid( o, headers );
+	  if ( problems ) return cb( problems );
+
+	  addUser( o, { disableWorkflow: disableNewUserWorkflow, isSuperAdmin: isSuperAdmin, accountName: loggedInUserAccountName }, function( err, user ) {
+	    if ( err ) return cb( err );
+	    rowNum += 1;
+	    cb();
+	  });
+	}, 1 );
+
+	// When the queue is finished, delete the uploaded file if it still exists
+	q.drain( function() {
+	  if ( fs.existsSync( files[0].path ) ) 
+	    fs.unlinkSync( files[0].path );
+	});
+
+	// When an error occurs, send it back to the client as fast as possible, but
+	// because we're streaming the csv, we can't really stop.
+	streamer.process( files[0].path, files[0].headers[ 'content-type' ], function( err, row ) {
+	  if ( err ) {
+	    if ( ! res.headersSent ) return res.status( 400 ).send( err.message );
+	  }
+	  else if ( row == null ) {
+	    if ( fs.existsSync( files[0].path ) ) 
+	      fs.unlinkSync( files[0].path );
+	    q.push( null );
+	  }
+	  else {
+	    var o = _.zipObject( headers, row );
+	    q.push( o, function( err ) {
+	      if ( err ) {
+		if ( ! res.headersSent ) return res.status( 400 ).send( err.message );
+	      }
+	    });
+	  }
+	});
+      }
     });
   });
 }
