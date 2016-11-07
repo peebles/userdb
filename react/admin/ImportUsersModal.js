@@ -52,6 +52,7 @@ export default class ImportUsersModal extends React.Component {
       baseUrl: '/users/import',
       dataType: 'text',
       fileFieldName: 'file',
+      textBeforeFiles: true,  // to send the non-file fields before the actual file
       paramAddToField: () => {
         return {
 	  ignoreHeaders: this.state.ignoreHeaders,
