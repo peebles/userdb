@@ -52,14 +52,14 @@ If you go the "npm install" route, then add the following into your `webpack.con
       {
         test: /\.js$/,
         loaders: ['babel-loader'],
-        exclude: /node_modules\/(?!(userdb)\/).*/,
-        include: [ path.join(__dirname, 'src'), path.join(__dirname,'node_modules','userdb') ]
+	exclude: /node_modules\/(?!(userdb\/react)\/).*/,
+	include: [ path.join(__dirname, 'src'), path.join(__dirname,'node_modules','userdb', 'react') ]
       }
     ]
   }
 ```
 
-In other words, exclude node_modules **except** for "userdb" and explicity include node_modules/userdb.
+In other words, exclude node_modules **except** for "userdb/react" and explicity include node_modules/userdb/react.
 
 ## Usage
 
