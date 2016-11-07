@@ -247,14 +247,18 @@ module.exports = function( app, udb ) {
 
   // curl -v  -F 'file=@data/users.xlsx;type=application/xlsx' http://192.168.99.104/users/import
   app.post( '/users/import', udb.authenticated, udb.authorized( ['super-admin', 'admin'], false ), function( req, res, next ) {
-    var streamer = require( '../lib/stream-csv' )(app);
-    var multiparty = require( 'multiparty' );
-    var fs = require( 'fs' );
-    var form = new multiparty.Form({
-      autoFiles: true,
-      maxFilesSize: 26214400, // 25 Mb
+    var streamer = require( '../lib/streaming-spreadsheet-processor.js' )(app);
+    
+    var Busboy = require( 'busboy' );
+    var busboy = new Busboy({
+      headers: req.headers,
+      limits: {
+	fileSize: 26214400, // 25 Mb
+	files: 1
+      }
     });
 
+    // Clean the column values by trimming off leading and trailing spaces
     function clean( str ) {
       if ( ! str ) return null;
       var c = str.replace( /^\s+/, '' ).replace( /\s+$/, '' );
@@ -262,11 +266,16 @@ module.exports = function( app, udb ) {
       else return c;
     }
 
+    // Make sure we have the minimum information and
+    // that the email field looks legit
     function isValid( u, headers ) {
       for( var i=0; i<headers.length; i++ ) {
 	u[ headers[i] ] = clean( u[ headers[i] ] );
-	if ( headers[i] != 'role' && u[ headers[i] ] == undefined ) {
-	  return new Error( 'Missing value for: ' + headers[i] );
+      }
+      var required = [ 'givenname', 'surname', 'email' ];
+      for( var i=0; i<required.length; i++ ) {
+	if ( u[ required[i] ] == undefined ) {
+	  return new Error( 'Missing value for: ' + required[i] );
 	}
       }
       var re = /^(([^<>()[\]\\.,;:\s@\"]+(\.[^<>()[\]\\.,;:\s@\"]+)*)|(\".+\"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
@@ -275,6 +284,7 @@ module.exports = function( app, udb ) {
       return null;
     }
 
+    // add a user to the database
     function addUser( u, options, cb ) {
       var dbu = {
         email: u.email,
@@ -283,15 +293,27 @@ module.exports = function( app, udb ) {
         customData: {},
         status: ( options.disableWorkflow ? 'ENABLED' : 'PENDING' )
       };
-      if ( ! options.isSuperAdmin ) u.account = options.accountName;
       async.waterfall([
         function( cb ) {
-	  //app.log.debug( 'add account:', u.account );
-          udb.findOrCreateAccount({ name: u.account }, function( err, account ) {
-            if ( err ) return cb( err );
-            dbu.account_id = account.id;
-            cb( null, account );
-          });
+	  if ( u.account_id ) {
+	    // if u.account_id, use it!
+	    udb.getAccounts({ 'accounts.id': u.account_id }, function( err, accounts ) {
+	      if ( err ) return cb( err );
+	      if ( ! ( accounts && accounts.length ) )
+		return cb( new Error( 'account not found for id: ' + u.account_id ) );
+	      dbu.account_id = accounts[0].id;
+	      cb( null, accounts[0] );
+	    });
+	  }
+	  else {
+	    // otherwise use column name
+	    //app.log.debug( 'add account:', u.account );
+            udb.findOrCreateAccount({ name: u.account }, function( err, account ) {
+              if ( err ) return cb( err );
+              dbu.account_id = account.id;
+              cb( null, account );
+            });
+	  }
         },
         function( account, cb ) {
           // every account should have an admin role
@@ -311,7 +333,7 @@ module.exports = function( app, udb ) {
         },
         function( role, cb ) {
 	  //app.log.debug( 'add user:', dbu );
-          udb.findOrCreateUser( dbu, (u.password || 'new123'), function( err, user ) {
+          udb.findOrCreateUser( dbu, (u.password || 'NonGuessable!0!1!2!3!4'), function( err, user ) {
             if ( err ) return cb( err );
             cb( null, user, role );
           });
@@ -341,86 +363,83 @@ module.exports = function( app, udb ) {
         return cb( null, user );
       });
     }
+
+    var fields = {};
+    var ignoreHeaders = true;
+    var disableNewUserWorkflow = false;
     
-    form.parse(req, function( err, _fields, _files ) {
-      if ( err ) return next( err );
-      var fields = {};
-      _.forIn( _fields, function( v, k ) {
-	if ( Array.isArray( v ) ) v = v[0];
-	fields[k] = v;
-      });
+    busboy.on('field', function( fieldname, v ) {
+      if ( Array.isArray( v ) ) v = v[0];
+      if ( v == "true" ) v = true;
+      else if ( v == "false" ) v = false;
+      if ( fieldname == 'ignoreHeaders' ) ignoreHeaders = v;
+      if ( fieldname == 'disableNewUserWorkflow' ) disableNewUserWorkflow = v;
+      fields[ fieldname ] = v;
+    });
 
-      var ignoreHeaders = fields.ignoreHeaders; // a checkbox on the file upload form
-      var disableNewUserWorkflow = fields.disableNewUserWorkflow;  // ditto
-      
-      var files = [];
-      _.forIn( _files, function( v, k ) {
-	files = _.concat( files, v );
-      });
-      if ( files.length != 1 ) {
-	files.forEach( function( file ) {
-	  require( 'fs' ).unlinkSync( file.path );
+    busboy.on('file', function(fieldname, file, filename, encoding, mimetype) {
+      var headers = [
+	'givenname', 'surname', 'email', 'role', 'password', 'account'
+      ];
+
+      // make sure we deal with rows sequencially!
+      var rowNum = 0;
+      var q = async.queue( function( o, cb ) {
+	if ( o == null ) {
+	  if ( ! res.headersSent ) res.status( 200 ).send( 'OK' );
+	  return process.nextTick( cb );
+	}
+	if ( rowNum == 0 && ignoreHeaders ) { rowNum += 1; return cb() };
+	//app.log.debug( o );
+
+	var problems = isValid( o, headers );
+	if ( problems ) return cb( problems );
+
+	addUser( o, { disableWorkflow: disableNewUserWorkflow }, function( err, user ) {
+	  if ( err ) return cb( err );
+	  rowNum += 1;
+	  cb();
 	});
-	return res.status( 400 ).send( 'One file and one file only supported!' );
-      }
-      else {
-	var headers = [
-	  'givenname', 'surname', 'email', 'role', 'password',
-	];
+      }, 1 );
 
-	// super-admins can import users into different accounts
-	var isSuperAdmin = req.user.has( 'super-admin' );
-	var loggedInUserAccountName = req.user.accounts[0].name;
+      // When an error occurs, send it back to the client as fast as possible, but
+      // because we're streaming the csv, we can't really stop.
+      streamer.process( file, filename, mimetype, function( err, row ) {
+	if ( err ) {
+	  if ( ! res.headersSent ) return res.status( 400 ).send( err.message );
+	}
+	else if ( row == null ) {
+	  q.push( null );
+	}
+	else {
+	  var o = _.zipObject( headers, row );
 
-	if ( isSuperAdmin ) headers.push( 'account' );
-	
-	// make sure we deal with rows sequencially!
-	var rowNum = 0;
-	var q = async.queue( function( o, cb ) {
-	  if ( o == null ) {
-	    if ( ! res.headersSent ) res.jsonp();  // on the EOF, send normal response
-	    return process.nextTick( cb );
-	  }
-	  if ( rowNum == 0 && ignoreHeaders ) { rowNum += 1; return cb() };
-	  //app.log.debug( o );
-
-	  var problems = isValid( o, headers );
-	  if ( problems ) return cb( problems );
-
-	  addUser( o, { disableWorkflow: disableNewUserWorkflow, isSuperAdmin: isSuperAdmin, accountName: loggedInUserAccountName }, function( err, user ) {
-	    if ( err ) return cb( err );
-	    rowNum += 1;
-	    cb();
-	  });
-	}, 1 );
-
-	// When the queue is finished, delete the uploaded file if it still exists
-	q.drain( function() {
-	  if ( fs.existsSync( files[0].path ) ) 
-	    fs.unlinkSync( files[0].path );
-	});
-
-	// When an error occurs, send it back to the client as fast as possible, but
-	// because we're streaming the csv, we can't really stop.
-	streamer.process( files[0].path, files[0].headers[ 'content-type' ], function( err, row ) {
-	  if ( err ) {
-	    if ( ! res.headersSent ) return res.status( 400 ).send( err.message );
-	  }
-	  else if ( row == null ) {
-	    if ( fs.existsSync( files[0].path ) ) 
-	      fs.unlinkSync( files[0].path );
-	    q.push( null );
+	  if ( req.user.has( 'super-admin' ) ) {
+	    if ( ! o.account ) {
+	      if ( ! fields.accountId ) {
+		if ( ! res.headersSent ) return res.status( 400 ).send( 'cannot determine account to add user to!' );
+		return;
+	      }
+	      else {
+		o.account_id = fields.accountId;
+	      }
+	    }
+	    // o.account takes precidense
 	  }
 	  else {
-	    var o = _.zipObject( headers, row );
-	    q.push( o, function( err ) {
-	      if ( err ) {
-		if ( ! res.headersSent ) return res.status( 400 ).send( err.message );
-	      }
-	    });
+	    // non super-user
+	    delete o.account;  // ignore
+	    o.account_id = req.user.accounts[0].id; // force it to admin user's account
 	  }
-	});
-      }
+	    
+	  q.push( o, function( err ) {
+	    if ( err ) {
+	      if ( ! res.headersSent ) return res.status( 400 ).send( err.message );
+	    }
+	  });
+	}
+      });
     });
+    req.pipe(busboy);
   });
 }

@@ -7,6 +7,8 @@ import { BootstrapTable, TableHeaderColumn } from 'react-bootstrap-table';
 import Confirm from 'react-confirm-bootstrap';
 import Alert from 'react-alert';
 
+import ImportUsersModal from './ImportUsersModal';
+
 export default class UsersTable extends React.Component {
 
   state = {
@@ -17,6 +19,7 @@ export default class UsersTable extends React.Component {
     sortField: 'fullName',
     sortOrder: 'asc',
     searchString: null,
+    showImportModal: false,
   };
 
   fetchUsers( page, sizePerPage, sortField, sortOrder, searchString ) {
@@ -54,11 +57,26 @@ export default class UsersTable extends React.Component {
   componentDidMount() {
     this.view = ReactDOM.findDOMNode( this );
     let btn = $( '.react-bs-table-tool-bar .btn-group', this.view ).append(
-      '<button class="btn btn-primary"><span class="icon-plus"></span>New</button>'
+      '<button class="btn btn-primary add-user"><span class="icon-plus"></span>New</button>'
     );
-    btn.on( 'click', () => {
+    btn.find('.add-user').on( 'click', () => {
       this.addUser();
     });
+    btn = $( '.react-bs-table-tool-bar .btn-group', this.view ).append(
+      '<button class="btn btn-warning import-users"><span class="icon-cloud-upload"></span>Import</button>'
+    );
+    btn.find('.import-users').on( 'click', () => {
+      this.setState({ showImportModal: true });
+    });
+  }
+
+  hideImportModal = () => {
+    this.setState({ showImportModal: false });
+  }
+
+  usersImported = () => {
+    this.setState({ showImportModal: false });
+    this.fetchUsers( this.state.currentPage, this.state.sizePerPage, this.state.sortField, this.state.sortOrder, this.state.searchString );
   }
 
   componentDidUpdate(prevProps, prevState) {
@@ -254,6 +272,7 @@ export default class UsersTable extends React.Component {
 	       time={5000}
 	       transition='scale'
 	/>
+	<ImportUsersModal accountId={this.props.accountId} show={this.state.showImportModal} onHide={this.hideImportModal} success={this.usersImported} />
       </div>
     );
   }

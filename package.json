@@ -1,6 +1,6 @@
 {
   "name": "userdb",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "User management/authentication system",
   "main": "index.js",
   "scripts": {},
@@ -16,6 +16,7 @@
   "dependencies": {
     "async": "^2.0.0-rc.6",
     "bcryptjs": "^2.3.0",
+    "busboy": "^0.2.13",
     "cortexjs": "^2.1.0",
     "csv-parse": "^1.1.7",
     "ejs": "^2.5.2",
@@ -23,7 +24,6 @@
     "js-yaml": "^3.6.1",
     "knex": "^0.11.7",
     "lodash": "^4.13.1",
-    "multiparty": "^4.1.2",
     "mysql": "^2.11.1",
     "njwt": "^0.3.1",
     "node-getopt": "^0.2.3",
@@ -38,6 +38,7 @@
     "react-bootstrap-table": "^2.4.1",
     "react-confirm-bootstrap": "^3.1.2",
     "react-dom": "^15.0.2",
+    "react-fileupload": "^2.4.0",
     "react-router": "^2.4.0",
     "react-select": "^1.0.0-rc.2",
     "react-side-effect": "^1.0.2",
@@ -46,6 +47,6 @@
     "shortid": "^2.2.6",
     "sprintf-js": "^1.0.3",
     "winston": "^2.2.0",
-    "xlsx": "^0.8.0"
+    "xlsx-stream-reader": "^0.9.6"
   }
 }

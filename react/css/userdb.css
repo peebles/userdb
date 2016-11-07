@@ -32,3 +32,10 @@
 .udb-accounts-table .react-bs-container-body, .udb-users-table .react-bs-container-body {
   overflow: visible;
 }
+
+.fu > span {
+  position: relative;
+  top: -13px;
+  margin-left: 4px;
+  font-weight: 600;
+}
