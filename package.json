@@ -1,6 +1,6 @@
 {
   "name": "userdb",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "User management/authentication system",
   "main": "index.js",
   "scripts": {},
@@ -28,7 +28,8 @@
     "njwt": "^0.3.1",
     "node-getopt": "^0.2.3",
     "node-uuid": "^1.4.7",
-    "nodemailer": "^2.6.4",
+    "nodemailer": "^2.4.2",
+    "nodemailer-ses-transport": "^1.5.0",
     "passport": "^0.3.2",
     "passport-local": "^1.0.0",
     "react": "^15.0.2",
