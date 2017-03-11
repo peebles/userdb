@@ -113,10 +113,10 @@ strategies: null
 # SMTP server to send emails.
 smtp:
   from: FROM_EMAIL_ADDRESS
-  auth:
-    user: SMTP_USER
-    pass: SMTP_PASS
   options:
+    auth:
+      user: SMTP_USER
+      pass: SMTP_PASS
     port: SMTP_PORT
     host: SMTP_HOST
     secure: true

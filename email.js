@@ -1,9 +1,10 @@
 var nodemailer = require('nodemailer');
+var ses = require('nodemailer-ses-transport');
+
 var _ = require( 'lodash' );
 
 module.exports = function( _options ) {
   var options = _.cloneDeep( _options );
-  options.options.auth = options.auth;
   var transporter = nodemailer.createTransport( options.options );
 
   function send( type, user, config, cb ) {
