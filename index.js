@@ -140,7 +140,7 @@ UserDB.prototype.initialize = function( app, _config ) {
       self.findUserById( id, function( err, user ) {
 	if ( err ) return done( err );
 	if ( user ) delete user.password;
-	self.addUserHelpers( user );
+	if ( user ) self.addUserHelpers( user );
 	done( null, user );
       });
     });
