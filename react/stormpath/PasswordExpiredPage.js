@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom';
 
 import BaseAuthPage from './BaseAuthPage';
 import { Link } from 'react-router';
-import { LoginLink } from 'react-stormpath';
+import { LogoutLink } from 'react-stormpath';
 import PasswordExpiredForm from './PasswordExpiredForm';
 import utils from '../lib/utils';
 
@@ -27,7 +27,7 @@ export default class PasswordExpiredPage extends React.Component {
 	    <span spBind="form.errorMessage" />
 	  </div>
 	  <div spIf="form.sent">
-	    <p>Your new password has been set. Please <LoginLink />.</p>
+	    <p>Your new password has been set. Please <a href="/logout">login</a>.</p>
 	  </div>
 	  <div spIf="!form.sent">
 	    <p className="hint">
