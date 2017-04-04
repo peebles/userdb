@@ -21,7 +21,7 @@ export default class ChangePasswordPage extends React.Component {
   render() {
     return (
       <BaseAuthPage pageTitle="Change Password" formTitle="Create New Password" formClass="login-form clearfix">
-	<ChangePasswordForm spToken={this.props.location.query.sptoken} onSubmit={this.validatePassword.bind(this)}>
+	<ChangePasswordForm spToken={this.props.location.query.sptoken || this.props.location.query.token} onSubmit={this.validatePassword.bind(this)}>
 	  <div spIf="form.error" className="alert alert-danger">
 	    <span spBind="form.errorMessage" />
 	  </div>

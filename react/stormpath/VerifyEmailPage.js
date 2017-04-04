@@ -23,7 +23,7 @@ export default class VerifyEmailPage extends React.Component {
     this.view = $(ReactDOM.findDOMNode(this));
 
     // Verify the sptoken
-    utils.makeRequest( '/welcome', { sptoken: this.props.location.query.sptoken } ).then( (res) => {
+    utils.makeRequest( '/welcome', { sptoken: this.props.location.query.sptoken, token: this.props.location.query.token } ).then( (res) => {
       this.setState({ account: res, verifyStatus: 'VERIFIED' });
     }).fail( (err) => {
       this.setState({ verifyStatus: 'ERROR', verifyError: 'The email link you are trying to verify has expired.' });
