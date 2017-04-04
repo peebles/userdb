@@ -5,6 +5,7 @@ import BaseAuthPage from './BaseAuthPage';
 import { Link } from 'react-router';
 import { LoginLink } from 'react-stormpath';
 import PasswordExpiredForm from './PasswordExpiredForm';
+import utils from '../lib/utils';
 
 export default class PasswordExpiredPage extends React.Component {
 
