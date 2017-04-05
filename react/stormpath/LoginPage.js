@@ -7,13 +7,33 @@ import { LoginForm } from 'react-stormpath';
 
 export default class LoginPage extends React.Component {
 
+  state = {
+    showError: false,
+    errorMessage: {}
+  };
+
+  onSubmit = ( e, next ) => {
+    this.setState({ showError: false });
+    next();
+  }
+  
+  onError = ( e, next ) => {
+    this.setState({
+      showError: true,
+      errorMessage: { __html: e.error }
+    });
+    next();
+  }
+
+  createErrorMarkup = () => {
+    return this.state.errorMessage;
+  }
+
   render() {
     return (
       <BaseAuthPage pageTitle="Login" formTitle="%APP% Login" formClass="login-form clearfix">
-	<LoginForm {...this.props}>
-	  <div spIf="form.error" className="alert alert-danger">
-	    <span spBind="form.errorMessage" />
-	  </div>
+	<LoginForm {...this.props} onSubmit={this.onSubmit} onSubmitError={this.onError}>
+	  { this.state.showError ? <div className="alert alert-danger" dangerouslySetInnerHTML={this.createErrorMarkup()} /> : <span></span> }
 	  <div className="row">
 	    <div className="col-xs-6">
 	      <input className="form-control form-control-solid placeholder-no-fix form-group"
